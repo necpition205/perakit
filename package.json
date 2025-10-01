@@ -1,0 +1,122 @@
+{
+  "name": "perakit",
+  "version": "1.0.0",
+  "description": "top debugger based frida",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "clean": "rimraf dist",
+    "postbuild": "bun scripts/postbuild.ts",
+    "dev": "concurrently -n main,renderer,electron -c cyan,magenta,green \"bun run dev:main\" \"bun run dev:renderer\" \"bun run dev:electron\"",
+    "dev:main": "tsup --config tsup.config.ts --watch",
+    "dev:renderer": "vite",
+    "dev:electron": "wait-on dist/main/main.js http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 nodemon -q --watch dist/main --watch dist/preload --exec \"electron .\"",
+    "build": "bun run clean && bun run build:main && bun run build:renderer && bun run postbuild",
+    "build:main": "tsup --config tsup.config.ts",
+    "build:renderer": "vite build",
+    "preview": "bun run build && electron .",
+    "dist": "bun run build && electron-builder",
+    "dist:win": "bun run build && electron-builder --win"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/necpition205/perakit.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/necpition205/perakit/issues"
+  },
+  "homepage": "https://github.com/necpition205/perakit#readme",
+  "devDependencies": {
+    "@types/electron": "^1.6.12",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^22.7.8",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "concurrently": "^9.1.0",
+    "cross-env": "^10.1.0",
+    "electron": "^38.2.0",
+    "electron-builder": "^26.0.12",
+    "nodemon": "^3.1.7",
+    "rimraf": "^6.0.1",
+    "tsup": "^8.3.5",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.10",
+    "@vitejs/plugin-react-swc": "^3.7.0",
+    "wait-on": "^8.0.2"
+  },
+  "build": {
+    "appId": "com.mswtester.perakit",
+    "productName": "PeraKit",
+    "files": [
+      "dist/**/*",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "extraResources": [
+      {
+        "from": "assets",
+        "to": "assets",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/scripts",
+        "to": "scripts",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "mac": {
+      "icon": "build/icon.png"
+    },
+    "linux": {
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PeraKit"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "necpition205",
+      "repo": "perakit"
+    },
+    "extraMetadata": {
+      "main": "dist/main/main.js"
+    }
+  },
+  "dependencies": {
+    "electron-store": "^11.0.0",
+    "frida": "^17.3.2",
+    "node-wget": "^0.4.3",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "styled-components": "^6.1.19",
+    "tar": "^7.5.1"
+  }
+}

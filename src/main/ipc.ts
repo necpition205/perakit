@@ -1,7 +1,10 @@
-import { ipcMain } from 'electron';
+import { ipcMain, BrowserWindow } from 'electron';
 import { fridaService } from './frida';
 
+let registered = false;
 export function registerIpc() {
+  if (registered) return;
+  registered = true;
   ipcMain.handle('frida:list-devices', async () => {
     return await fridaService.listDevices();
   });
@@ -26,5 +29,12 @@ export function registerIpc() {
   ipcMain.handle('frida:rpc', async (_e, method: string, ...args: any[]) => {
     return await fridaService.rpc(method, ...args);
   });
-}
 
+  // forward frida service events to all renderer windows
+  fridaService.events.on('detached', (reason: string) => {
+    const wins = BrowserWindow.getAllWindows();
+    for (const w of wins) {
+      try { w.webContents.send('frida:detached', { reason }); } catch {}
+    }
+  });
+}

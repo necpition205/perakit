@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import styled from '@emotion/styled';
 import { Portal } from './Portal';
+import { AnimatePresence, motion } from 'framer-motion';
 
 export type ModalProps = {
   open: boolean;
@@ -11,13 +12,13 @@ export type ModalProps = {
   width?: number | string;
 };
 
-const Overlay = styled.div`
+const Overlay = styled(motion.div)`
   position: fixed; inset: 0; background: rgba(0,0,0,0.4);
   display: flex; align-items: center; justify-content: center;
   z-index: 50;
 `;
 
-const Card = styled.div<{ width?: number | string }>`
+const Card = styled(motion.div)<{ width?: number | string }>`
   width: ${({ width }) => (typeof width === 'number' ? `${width}px` : width || '520px')};
   max-width: calc(100vw - 32px);
   background: #fff; color: inherit; border-radius: 10px;
@@ -44,17 +45,33 @@ export default function Modal({ open, onClose, title, footer, children, width }:
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
   return (
     <Portal>
-      <Overlay onClick={onClose}>
-        <Card width={width} onClick={(e) => e.stopPropagation()}>
-          {title && <Header>{title}</Header>}
-          <Body>{children}</Body>
-          {footer && <Footer>{footer}</Footer>}
-        </Card>
-      </Overlay>
+      <AnimatePresence>
+        {open && (
+          <Overlay
+            key="modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16 }}
+            onClick={onClose}
+          >
+            <Card
+              width={width}
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.98 }}
+              transition={{ duration: 0.18 }}
+            >
+              {title && <Header>{title}</Header>}
+              <Body>{children}</Body>
+              {footer && <Footer>{footer}</Footer>}
+            </Card>
+          </Overlay>
+        )}
+      </AnimatePresence>
     </Portal>
   );
 }
-

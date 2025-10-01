@@ -1,5 +1,6 @@
 import React from 'react';
 import styled from '@emotion/styled';
+import { motion } from 'framer-motion';
 import { useAppStore, TabKey } from '../store/app';
 import { AppleIcon, BlocksIcon, CodeIcon, CoffeeIcon, ComponentIcon, MicrochipIcon, MonitorSmartphoneIcon, ScrollTextIcon, SpoolIcon } from 'lucide-react';
 
@@ -14,7 +15,7 @@ const Container = styled.aside`
   min-height: 0;
 `;
 
-const Item = styled.button<{ active?: boolean }>`
+const Item = styled(motion.button)<{ active?: boolean }>`
   appearance: none;
   text-align: left;
   padding: 8px 10px;
@@ -44,7 +45,16 @@ export function Sidebar() {
   return (
     <Container>
       {tabs.map(t => (
-        <Item key={t.key} active={activeTab === t.key} onClick={() => setTab(t.key)}>
+        <Item
+          key={t.key}
+          active={activeTab === t.key}
+          onClick={() => setTab(t.key)}
+          title={t.label}
+          aria-label={t.label}
+          whileHover={{ scale: 1.06 }}
+          whileTap={{ scale: 0.96 }}
+          transition={{ duration: 0.1 }}
+        >
           <t.icon />
         </Item>
       ))}

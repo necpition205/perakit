@@ -27,6 +27,7 @@ type Actions = {
   detach: () => Promise<void>;
   setSelectedDevice: (id?: string) => void;
   setSelectedProcess: (payload?: { pid?: number; name?: string }) => void;
+  handleRemoteDetached: (reason?: string) => void;
 };
 
 export const useAppStore = create<State & Actions>((set, get) => ({
@@ -106,5 +107,9 @@ export const useAppStore = create<State & Actions>((set, get) => ({
       set({ error: msg, loading: false });
       alert({ title: 'Detach failed', description: msg, variant: 'error' });
     }
+  },
+  handleRemoteDetached: (reason) => {
+    set({ attached: null });
+    alert({ title: 'Session detached', description: reason || 'unknown', variant: 'warning' });
   },
 }));

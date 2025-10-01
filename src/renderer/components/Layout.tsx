@@ -1,5 +1,6 @@
-import React, { PropsWithChildren } from 'react';
+import React, { PropsWithChildren, useEffect } from 'react';
 import styled from '@emotion/styled';
+import { motion } from 'framer-motion';
 import Sidebar, { tabs } from './Sidebar';
 import { useAppStore } from '../store/app';
 
@@ -21,11 +22,11 @@ const Main = styled.main`
   overflow: hidden;
 `;
 
-const TopBar = styled.header`
+const TopBar = styled(motion.header)`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border, #e5e7eb);
 `;
 
@@ -39,17 +40,36 @@ export default function Layout({ children }: PropsWithChildren) {
   const devices = useAppStore(s => s.devices);
   const selectedDeviceId = useAppStore(s => s.selectedDeviceId);
   const attached = useAppStore(s => s.attached);
+  const setTab = useAppStore(s => s.setTab);
+  const handleRemoteDetached = useAppStore(s => s.handleRemoteDetached);
 
   const deviceLabel = selectedDeviceId
     ? (devices.find(d => d.id === selectedDeviceId)?.name || selectedDeviceId)
     : 'Local Device';
   const attachedLabel = attached ? (attached.name || (attached.pid != null ? `PID ${attached.pid}` : '')) : '-';
 
+  // Keyboard shortcuts from main: Ctrl/Cmd + [1..9]
+  useEffect(() => {
+    const unsub = window.api.onGoTab((index) => {
+      if (typeof index !== 'number') return;
+      const target = tabs[index];
+      if (target) setTab(target.key);
+    });
+    return () => { unsub && unsub(); };
+  }, [setTab]);
+
+  useEffect(() => {
+    const unsub = window.api.onFridaDetached(({ reason }) => {
+      handleRemoteDetached(reason);
+    });
+    return () => { unsub && unsub(); };
+  }, [handleRemoteDetached]);
+
   return (
     <Root>
       <Sidebar />
       <Main>
-        <TopBar>
+        <TopBar initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
           <strong>{tabs.find(t => t.key === activeTab)?.label}</strong>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, opacity: 0.85 }}>
             <span>Device: <b>{deviceLabel}</b></span>

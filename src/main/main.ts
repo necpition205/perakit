@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, shell, Menu } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { registerIpc } from './ipc';
@@ -61,6 +61,26 @@ async function createWindow() {
 app.whenReady().then(async () => {
   registerIpc();
   await createWindow();
+
+  // Application menu with keyboard shortcuts for numbered tabs
+  const template = [
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+    {
+      label: 'Navigation',
+      submenu: [
+        ...Array.from({ length: 9 }, (_, i) => ({
+          label: `Tab ${i + 1}`,
+          accelerator: `CmdOrCtrl+${i + 1}`,
+          click: () => {
+            const win = BrowserWindow.getFocusedWindow() || mainWindow;
+            win?.webContents.send('app:go-tab', { index: i });
+          }
+        }))
+      ]
+    }
+  ];
+  const menu = Menu.buildFromTemplate(template as any);
+  Menu.setApplicationMenu(menu);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -27,7 +27,9 @@ export const useToastStore = create<ToastStore>((set, get) => ({
     const id = Math.random().toString(36).slice(2);
     const duration = t.duration ?? 3000;
     const toast: Toast = { id, duration, variant: 'info', expiresAt: Date.now() + duration, ...t };
-    set({ toasts: [...get().toasts, toast] });
+    const MAX = 5;
+    const next = [...get().toasts, toast];
+    set({ toasts: next.slice(Math.max(0, next.length - MAX)) });
     return id;
   },
   dismiss: (id) => set({ toasts: get().toasts.filter(t => t.id !== id) }),

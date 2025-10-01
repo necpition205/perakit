@@ -6,6 +6,7 @@ import XStack from '../components/XStack';
 import YStack from '../components/YStack';
 import Select from '../components/Select';
 import { List, ListItem, ListEmpty } from '../components/List';
+import { motion } from 'framer-motion';
 import Modal from '../components/Modal';
 import { toast } from '../components/Toast';
 
@@ -91,14 +92,15 @@ export default function AttachPage() {
           <List>
             {filtered.length === 0 && <ListEmpty label="No processes" />}
             {filtered.map(p => (
-              <ListItem
-                key={p.pid}
-                active={selectedPid === p.pid}
-                onClick={() => setSelectedProcess({ pid: p.pid, name: p.name })}
-              >
-                <strong style={{ color: 'var(--accent-900, #1e293b)', minWidth: 64 }}>[{p.pid}]</strong>
-                <span>{p.name}</span>
-              </ListItem>
+              <motion.div key={p.pid} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.12 }}>
+                <ListItem
+                  active={selectedPid === p.pid}
+                  onClick={() => setSelectedProcess({ pid: p.pid, name: p.name })}
+                >
+                  <strong style={{ color: 'var(--accent-900, #1e293b)', minWidth: 64 }}>[{p.pid}]</strong>
+                  <span>{p.name}</span>
+                </ListItem>
+              </motion.div>
             ))}
           </List>
         </YStack>

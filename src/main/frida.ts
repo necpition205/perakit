@@ -1,4 +1,5 @@
 import type { Session, Script, Device } from 'frida';
+import { EventEmitter } from 'events';
 let frida: typeof import('frida') | null = null;
 
 function ensureFrida() {
@@ -14,6 +15,7 @@ export type AttachTarget = { pid?: number; name?: string };
 export class FridaService {
   private session: Session | null = null;
   private script: Script | null = null;
+  public readonly events = new EventEmitter();
 
   async listDevices() {
     const devices = await ensureFrida().getDeviceManager().enumerateDevices();
@@ -41,8 +43,13 @@ export class FridaService {
     else if (target.name) this.session = await device.attach(target.name);
     else throw new Error('attach requires pid or name');
 
-    this.session.detached.connect((_reason) => {
+    this.session.detached.connect((reason: any) => {
+      // release references to avoid leaks on remote detach
+      this.script = null;
       this.session = null;
+      try {
+        this.events.emit('detached', serializeReason(reason));
+      } catch {}
     });
 
     return { attached: true };
@@ -70,8 +77,23 @@ export class FridaService {
       try { await this.session.detach(); } catch {}
       this.session = null;
     }
+    try { this.events.emit('detached', 'manual'); } catch {}
     return { detached: true };
   }
 }
 
 export const fridaService = new FridaService();
+
+function serializeReason(reason: any): string {
+  if (!reason) return 'unknown';
+  try {
+    if (typeof reason === 'string') return reason;
+    if (typeof reason === 'object') {
+      const msg = (reason as any).message || (reason as any).reason || JSON.stringify(reason);
+      return msg || 'unknown';
+    }
+    return String(reason);
+  } catch {
+    return 'unknown';
+  }
+}

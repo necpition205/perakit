@@ -6,6 +6,7 @@ import AttachPage from './pages/attach';
 import { theme } from './theme';
 import { ToastContainer } from './components/Toast';
 import { AlertsContainer } from './components/Alerts';
+import { AnimatePresence, motion } from 'framer-motion';
 
 export default function App() {
   const activeTab = useAppStore(s => s.activeTab);
@@ -29,13 +30,32 @@ export default function App() {
         * { box-sizing: border-box; }
       `}/>
       <Layout>
-        {activeTab === 'attach' && <AttachPage />}
-        {activeTab !== 'attach' && (
-          <div style={{ padding: 16 }}>
-            <h3 style={{ marginTop: 0 }}>Coming soon</h3>
-            <p>Tab: {activeTab}</p>
-          </div>
-        )}
+        <AnimatePresence mode="wait">
+          {activeTab === 'attach' ? (
+            <motion.div
+              key="tab-attach"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18 }}
+              style={{ height: '100%' }}
+            >
+              <AttachPage />
+            </motion.div>
+          ) : (
+            <motion.div
+              key={`tab-${activeTab}`}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18 }}
+              style={{ padding: 16 }}
+            >
+              <h3 style={{ marginTop: 0 }}>Coming soon</h3>
+              <p>Tab: {activeTab}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </Layout>
       <ToastContainer />
       <AlertsContainer />

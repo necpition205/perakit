@@ -1,4 +1,4 @@
-import { contextBridge } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
 
 // Optional: lazily require frida in preload to avoid errors if binding missing during early dev
 let fridaVersion: string | null = null;
@@ -10,10 +10,20 @@ try {
   fridaVersion = null;
 }
 
+const fridaApi = {
+  listDevices: () => ipcRenderer.invoke('frida:list-devices'),
+  listProcesses: (deviceId?: string) => ipcRenderer.invoke('frida:list-processes', deviceId),
+  attach: (payload: { pid?: number; name?: string; deviceId?: string }) => ipcRenderer.invoke('frida:attach', payload),
+  detach: () => ipcRenderer.invoke('frida:detach'),
+  createScript: (source: string) => ipcRenderer.invoke('frida:create-script', source),
+  rpc: (method: string, ...args: any[]) => ipcRenderer.invoke('frida:rpc', method, ...args),
+};
+
 contextBridge.exposeInMainWorld('api', {
   platform: process.platform,
   versions: process.versions,
   fridaVersion,
+  frida: fridaApi,
 });
 
 declare global {
@@ -22,7 +32,14 @@ declare global {
       platform: NodeJS.Platform;
       versions: Record<string, string>;
       fridaVersion: string | null;
+      frida: {
+        listDevices: () => Promise<Array<{ id: string; name: string; type: string }>>;
+        listProcesses: (deviceId?: string) => Promise<Array<{ pid: number; name: string }>>;
+        attach: (payload: { pid?: number; name?: string; deviceId?: string }) => Promise<{ attached: boolean }>;
+        detach: () => Promise<{ detached: boolean }>;
+        createScript: (source: string) => Promise<{ loaded: boolean }>;
+        rpc: <T = unknown>(method: string, ...args: any[]) => Promise<T>;
+      };
     };
   }
 }
-

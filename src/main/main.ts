@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { registerIpc } from './ipc';
 
 const isDev = !app.isPackaged;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL || '';
@@ -25,12 +26,15 @@ async function createWindow() {
       nodeIntegration: false,
       sandbox: false
     },
-    show: false
+    show: false,
+    autoHideMenuBar: true,
+    titleBarOverlay: true,
+    accentColor: '#000000'
   });
 
   if (isDev && devServerUrl) {
     await mainWindow.loadURL(devServerUrl);
-    // mainWindow.webContents.openDevTools({ mode: 'detach' });
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     const indexPath = path.join(__dirname, '..', 'renderer', 'index.html');
     if (fs.existsSync(indexPath)) {
@@ -55,6 +59,7 @@ async function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  registerIpc();
   await createWindow();
 
   app.on('activate', () => {
@@ -67,4 +72,3 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
-

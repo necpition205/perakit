@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import { useAppStore } from './store/app';
 import AttachPage from './pages/attach';
 import { theme } from './theme';
+import { ToastContainer } from './components/Toast';
 
 export default function App() {
   const activeTab = useAppStore(s => s.activeTab);
@@ -35,6 +36,7 @@ export default function App() {
           </div>
         )}
       </Layout>
+      <ToastContainer />
     </ThemeProvider>
   );
 }

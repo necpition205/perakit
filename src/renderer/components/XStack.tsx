@@ -1,13 +1,14 @@
 import styled from "@emotion/styled";
-import type { SizeProps, PaddingProps, MarginProps, FlexProps} from "../styles/util";
-import { ApplyFlex, ApplySize, ApplyPadding, ApplyMargin } from "../styles/util";
+import type { SizeProps, PaddingProps, MarginProps, FlexProps, RoundedProps} from "../styles/util";
+import { ApplyFlex, ApplySize, ApplyPadding, ApplyMargin, ApplyRounded } from "../styles/util";
 
 
 const XStack = styled.div<
   FlexProps &
   SizeProps &
   PaddingProps &
-  MarginProps
+  MarginProps &
+  RoundedProps
 >`
   display:flex;
   flex-direction: row;
@@ -15,6 +16,7 @@ const XStack = styled.div<
   ${ApplySize}
   ${ApplyPadding}
   ${ApplyMargin}
+  ${ApplyRounded}
 `
 
 export default XStack;

@@ -10,6 +10,8 @@ type State = {
   devices: Device[];
   processes: Process[];
   selectedDeviceId?: string;
+  selectedPid?: number;
+  selectedProcessName?: string;
   attached?: { pid?: number; name?: string } | null;
   loading: boolean;
   error?: string | null;
@@ -22,6 +24,7 @@ type Actions = {
   attachTo: (payload: { pid?: number; name?: string }) => Promise<void>;
   detach: () => Promise<void>;
   setSelectedDevice: (id?: string) => void;
+  setSelectedProcess: (payload?: { pid?: number; name?: string }) => void;
 };
 
 export const useAppStore = create<State & Actions>((set, get) => ({
@@ -34,7 +37,8 @@ export const useAppStore = create<State & Actions>((set, get) => ({
 
   setTab: (tab) => set({ activeTab: tab }),
 
-  setSelectedDevice: (id) => set({ selectedDeviceId: id }),
+  setSelectedDevice: (id) => set({ selectedDeviceId: id, selectedPid: undefined, selectedProcessName: undefined }),
+  setSelectedProcess: (payload) => set({ selectedPid: payload?.pid, selectedProcessName: payload?.name }),
 
   refreshDevices: async () => {
     set({ loading: true, error: null });
@@ -60,8 +64,10 @@ export const useAppStore = create<State & Actions>((set, get) => ({
   attachTo: async (payload) => {
     set({ loading: true, error: null });
     try {
-      await window.api.frida.attach({ ...payload, deviceId: get().selectedDeviceId });
-      set({ attached: payload, loading: false });
+      const pid = payload.pid ?? get().selectedPid;
+      const name = payload.name ?? get().selectedProcessName;
+      await window.api.frida.attach({ pid, name, deviceId: get().selectedDeviceId });
+      set({ attached: { pid, name }, loading: false });
     } catch (e: any) {
       set({ error: e?.message || String(e), loading: false });
     }
@@ -77,4 +83,3 @@ export const useAppStore = create<State & Actions>((set, get) => ({
     }
   },
 }));
-

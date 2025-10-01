@@ -20,7 +20,17 @@ export function ApplySize(props: SizeProps) {
   if (minH) styles.set(`min-height`, numberOr(minH));
   if (maxW) styles.set(`max-width`, numberOr(maxW));
   if (maxH) styles.set(`max-height`, numberOr(maxH));
-  return Array.from(styles.entries()).map(([k, v]) => `${k}: ${v}`).join('; ');
+  return Array.from(styles.entries()).map(([k, v]) => `${k}: ${v}`).join('; ') + ";";
+}
+
+export interface RoundedProps {
+  r?: number | string;
+}
+
+export function ApplyRounded(props: RoundedProps) {
+  const styles: Map<string, string> = new Map();
+  if (props.r) styles.set(`border-radius`, numberOr(props.r));
+  return Array.from(styles.entries()).map(([k, v]) => `${k}: ${v}`).join('; ') + ";";
 }
 
 export interface PositionProps {
@@ -36,7 +46,7 @@ export function ApplyPosition(props: PositionProps) {
   if (props.right) styles.set(`right`, numberOr(props.right));
   if (props.bottom) styles.set(`bottom`, numberOr(props.bottom));
   if (props.left) styles.set(`left`, numberOr(props.left));
-  return Array.from(styles.entries()).map(([k, v]) => `${k}: ${v}`).join('; ');
+  return Array.from(styles.entries()).map(([k, v]) => `${k}: ${v}`).join('; ') + ";";
 }
 
 export interface PaddingProps {
@@ -61,7 +71,7 @@ export function ApplyPadding(props: PaddingProps) {
   if (props.pr) styles.set(`padding-right`, numberOr(props.pr));
   if (props.pb) styles.set(`padding-bottom`, numberOr(props.pb));
   if (props.pl) styles.set(`padding-left`, numberOr(props.pl));
-  return Array.from(styles.entries()).map(([k, v]) => `${k}: ${v}`).join('; ');
+  return Array.from(styles.entries()).map(([k, v]) => `${k}: ${v}`).join('; ') + ";";
 }
 
 export interface MarginProps {
@@ -86,7 +96,7 @@ export function ApplyMargin(props: MarginProps) {
   if (props.mr) styles.set(`margin-right`, numberOr(props.mr));
   if (props.mb) styles.set(`margin-bottom`, numberOr(props.mb));
   if (props.ml) styles.set(`margin-left`, numberOr(props.ml));
-  return Array.from(styles.entries()).map(([k, v]) => `${k}: ${v}`).join('; ');
+  return Array.from(styles.entries()).map(([k, v]) => `${k}: ${v}`).join('; ') + ";";
 }
 
 export interface FlexProps {
@@ -124,5 +134,5 @@ export function ApplyFlex(props: FlexProps) {
   else if (props.alignStretch) styles.set(`align-items`, `stretch`);
   if (props.wrap) styles.set(`flex-wrap`, `wrap`);
   if (props.gap) styles.set(`gap`, numberOr(props.gap));
-  return Array.from(styles.entries()).map(([k, v]) => `${k}: ${v}`).join('; ');
+  return Array.from(styles.entries()).map(([k, v]) => `${k}: ${v}`).join('; ') + ";";
 }

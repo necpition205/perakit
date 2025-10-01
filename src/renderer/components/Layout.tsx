@@ -31,7 +31,7 @@ const TopBar = styled.header`
 
 const Content = styled.section`
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
 `;
 
 export default function Layout({ children }: PropsWithChildren) {
@@ -50,4 +50,3 @@ export default function Layout({ children }: PropsWithChildren) {
     </Root>
   );
 }
-

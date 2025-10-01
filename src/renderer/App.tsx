@@ -3,6 +3,7 @@ import { ThemeProvider, Global, css } from '@emotion/react';
 import Layout from './components/Layout';
 import { useAppStore } from './store/app';
 import AttachPage from './pages/attach';
+import MemoryPage from './pages/memory';
 import { theme } from './theme';
 import { ToastContainer } from './components/Toast';
 import { AlertsContainer } from './components/Alerts';
@@ -41,6 +42,17 @@ export default function App() {
               style={{ height: '100%' }}
             >
               <AttachPage />
+            </motion.div>
+          ) : activeTab === 'memory' ? (
+            <motion.div
+              key="tab-memory"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18 }}
+              style={{ height: '100%' }}
+            >
+              <MemoryPage />
             </motion.div>
           ) : (
             <motion.div

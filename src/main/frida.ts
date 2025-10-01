@@ -1,5 +1,8 @@
 import type { Session, Script, Device } from 'frida';
 import { EventEmitter } from 'events';
+import fs from 'fs';
+import path from 'path';
+import { app } from 'electron';
 let frida: typeof import('frida') | null = null;
 
 function ensureFrida() {
@@ -14,7 +17,8 @@ export type AttachTarget = { pid?: number; name?: string };
 
 export class FridaService {
   private session: Session | null = null;
-  private script: Script | null = null;
+  private masterScript: Script | null = null;
+  private addonScripts: Script[] = [];
   public readonly events = new EventEmitter();
 
   async listDevices() {
@@ -45,33 +49,61 @@ export class FridaService {
 
     this.session.detached.connect((reason: any) => {
       // release references to avoid leaks on remote detach
-      this.script = null;
+      this.masterScript = null;
+      this.addonScripts = [];
       this.session = null;
       try {
         this.events.emit('detached', serializeReason(reason));
       } catch {}
     });
 
+    // Load master agent script on attach
+    try {
+      await this.loadMasterAgent();
+    } catch (e) {
+      // Non-fatal: features that rely on master may add their own scripts later
+      // eslint-disable-next-line no-console
+      console.warn('[frida] master agent load failed:', e);
+    }
+
     return { attached: true };
   }
 
   async createScript(source: string) {
     if (!this.session) throw new Error('No active session');
-    if (this.script) await this.script.unload();
-    this.script = await this.session.createScript(source);
-    await this.script.load();
+    const sc = await this.session.createScript(source);
+    await sc.load();
+    this.addonScripts.push(sc);
     return { loaded: true };
   }
 
   async rpc<T = unknown>(method: string, ...args: any[]): Promise<T> {
-    if (!this.script) throw new Error('No active script');
-    return await (this.script as any).exports[method](...args);
+    const candidates: (Script | null)[] = [this.masterScript, ...this.addonScripts];
+    if (candidates.length === 0) throw new Error('No active script');
+    for (const sc of candidates) {
+      if (!sc) continue;
+      try {
+        const fn = (sc as any).exports[method];
+        if (typeof fn === 'function') {
+          return await fn(...args);
+        }
+      } catch (_) {
+        // try next
+      }
+    }
+    throw new Error(`RPC method not found: ${method}`);
   }
 
   async detach() {
-    if (this.script) {
-      try { await this.script.unload(); } catch {}
-      this.script = null;
+    if (this.masterScript) {
+      try { await this.masterScript.unload(); } catch {}
+      this.masterScript = null;
+    }
+    if (this.addonScripts.length) {
+      for (const sc of this.addonScripts) {
+        try { await sc.unload(); } catch {}
+      }
+      this.addonScripts = [];
     }
     if (this.session) {
       try { await this.session.detach(); } catch {}
@@ -79,6 +111,37 @@ export class FridaService {
     }
     try { this.events.emit('detached', 'manual'); } catch {}
     return { detached: true };
+  }
+
+  private resolveMasterAgentPath(): string | null {
+    const rel = path.join('agents', 'master.js');
+    // packaged
+    try {
+      if (app && app.isPackaged) {
+        const p = path.join(process.resourcesPath, rel);
+        if (fs.existsSync(p)) return p;
+      }
+    } catch {}
+    // dev: look relative to project root/dist
+    const devCandidates = [
+      path.join(__dirname, '..', '..', rel), // dist/main -> project/agents/master.js
+      path.join(process.cwd(), rel),
+      path.join(process.cwd(), 'resources', rel),
+    ];
+    for (const p of devCandidates) {
+      try { if (fs.existsSync(p)) return p; } catch {}
+    }
+    return null;
+  }
+
+  private async loadMasterAgent() {
+    if (!this.session) throw new Error('No active session');
+    const p = this.resolveMasterAgentPath();
+    if (!p) throw new Error('Master agent not found');
+    const source = fs.readFileSync(p, 'utf8');
+    const sc = await this.session.createScript(source);
+    await sc.load();
+    this.masterScript = sc;
   }
 }
 

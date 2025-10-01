@@ -3,6 +3,7 @@ import styled from '@emotion/styled';
 import { motion } from 'framer-motion';
 import Sidebar, { tabs } from './Sidebar';
 import { useAppStore } from '../store/app';
+import { useMemoryStore } from '../store/memory';
 
 const Root = styled.div`
   display: flex;
@@ -42,6 +43,7 @@ export default function Layout({ children }: PropsWithChildren) {
   const attached = useAppStore(s => s.attached);
   const setTab = useAppStore(s => s.setTab);
   const handleRemoteDetached = useAppStore(s => s.handleRemoteDetached);
+  const disposeMemory = useMemoryStore(s => s.dispose);
 
   const deviceLabel = selectedDeviceId
     ? (devices.find(d => d.id === selectedDeviceId)?.name || selectedDeviceId)
@@ -61,9 +63,10 @@ export default function Layout({ children }: PropsWithChildren) {
   useEffect(() => {
     const unsub = window.api.onFridaDetached(({ reason }) => {
       handleRemoteDetached(reason);
+      disposeMemory();
     });
     return () => { unsub && unsub(); };
-  }, [handleRemoteDetached]);
+  }, [handleRemoteDetached, disposeMemory]);
 
   return (
     <Root>

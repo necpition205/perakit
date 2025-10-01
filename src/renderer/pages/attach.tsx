@@ -49,12 +49,10 @@ export default function AttachPage() {
   }, [filter, processes]);
 
   const onConfirmAttach = async () => {
-    try {
-      await attachTo({ pid: typeof pidInput === 'number' ? pidInput : undefined, name: nameInput || undefined });
+    const ok = await attachTo({ pid: typeof pidInput === 'number' ? pidInput : undefined, name: nameInput || undefined });
+    if (ok) {
       setAttachOpen(false);
       toast({ title: 'Attached', description: nameInput || (selectedPid ? `PID ${selectedPid}` : ''), variant: 'success' });
-    } catch (e: any) {
-      toast({ title: 'Attach failed', description: e?.message || String(e), variant: 'error' });
     }
   };
 

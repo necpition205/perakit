@@ -25,7 +25,7 @@ const TopBar = styled.header`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border, #e5e7eb);
 `;
 
@@ -36,6 +36,14 @@ const Content = styled.section`
 
 export default function Layout({ children }: PropsWithChildren) {
   const activeTab = useAppStore(s => s.activeTab);
+  const devices = useAppStore(s => s.devices);
+  const selectedDeviceId = useAppStore(s => s.selectedDeviceId);
+  const attached = useAppStore(s => s.attached);
+
+  const deviceLabel = selectedDeviceId
+    ? (devices.find(d => d.id === selectedDeviceId)?.name || selectedDeviceId)
+    : 'Local Device';
+  const attachedLabel = attached ? (attached.name || (attached.pid != null ? `PID ${attached.pid}` : '')) : '-';
 
   return (
     <Root>
@@ -43,7 +51,10 @@ export default function Layout({ children }: PropsWithChildren) {
       <Main>
         <TopBar>
           <strong>{tabs.find(t => t.key === activeTab)?.label}</strong>
-          <span style={{ opacity: 0.7 }}>PeraKit</span>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, opacity: 0.85 }}>
+            <span>Device: <b>{deviceLabel}</b></span>
+            <span>Attached: <b>{attachedLabel}</b></span>
+          </div>
         </TopBar>
         <Content>{children}</Content>
       </Main>

@@ -29,6 +29,17 @@
     "url": "https://github.com/necpition205/perakit/issues"
   },
   "homepage": "https://github.com/necpition205/perakit#readme",
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "electron-store": "^11.0.0",
+    "frida": "^17.3.2",
+    "node-wget": "^0.4.3",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "tar": "^7.5.1",
+    "zustand": "^5.0.8"
+  },
   "devDependencies": {
     "@types/electron": "^1.6.12",
     "@types/fs-extra": "^11.0.4",
@@ -109,14 +120,5 @@
     "extraMetadata": {
       "main": "dist/main/main.js"
     }
-  },
-  "dependencies": {
-    "electron-store": "^11.0.0",
-    "frida": "^17.3.2",
-    "node-wget": "^0.4.3",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "styled-components": "^6.1.19",
-    "tar": "^7.5.1"
   }
 }

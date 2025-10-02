@@ -4,6 +4,8 @@
 
 rpc.exports = {
   ping() { return 'ok'; },
-  version() { return 'master-agent@dev'; }
+  version() { return 'master-agent@dev'; },
+  // Minimal stubs so RPCs always resolve; real implementation lives in feature agents
+  mem_scan() { return []; },
+  mem_refine(addrs, _opts) { return Array.isArray(addrs) ? addrs : []; }
 };
-

@@ -4,12 +4,12 @@
 const MEMORY_AGENT_SOURCE = String.raw`
 // --- memory/ranges ---
 function listRanges(protections) {
-  const want = protections && protections.length ? protections : ['rw-', 'rwx', 'r--', 'r-x'];
+  const want = (protections && protections.length ? protections : ['rw-', 'rwx', 'r--', 'r-x']);
   const seen = new Set();
   const out = [];
   for (const prot of want) {
     try {
-      const ranges = Process.enumerateRangesSync(prot);
+      const ranges = Process.enumerateRangesSync({ protection: prot, coalesce: true });
       for (const r of ranges) {
         const key = r.base.toString() + ':' + r.size.toString();
         if (seen.has(key)) continue;

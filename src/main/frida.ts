@@ -78,7 +78,8 @@ export class FridaService {
   }
 
   async rpc<T = unknown>(method: string, ...args: any[]): Promise<T> {
-    const candidates: (Script | null)[] = [this.masterScript, ...this.addonScripts];
+    // Prefer feature/addon scripts first, then fall back to master
+    const candidates: (Script | null)[] = [...this.addonScripts, this.masterScript];
     if (candidates.length === 0) throw new Error('No active script');
     for (const sc of candidates) {
       if (!sc) continue;

@@ -13,6 +13,8 @@ type State = {
   loaded: boolean; // agent loaded
   scanning: boolean;
   stage: 'idle' | 'first' | 'refined';
+  startedAt?: number;
+  finishedAt?: number;
   protections: Protection[];
   type: MemType;
   cmp: 'eq' | 'gt' | 'lt' | 'ge' | 'le' | 'between' | 'approx';
@@ -23,6 +25,7 @@ type State = {
   limit: number;
   results: MemResult[];
   bookmarks: MemBookmark[];
+  logs: { ts: number; level: 'info' | 'warn' | 'error'; text: string }[];
 };
 
 type Actions = {
@@ -39,12 +42,15 @@ type Actions = {
   firstScan: () => Promise<void>;
   nextScan: () => Promise<void>;
   clearResults: () => void;
+  log: (level: 'info' | 'warn' | 'error', text: string) => void;
+  clearLogs: () => void;
   read: (addr: string, size: number) => Promise<number[]>;
   readTyped: (addr: string, type: MemType) => Promise<any>;
   write: (addr: string, bytes: number[]) => Promise<boolean>;
   writeTyped: (addr: string, type: MemType, value: any) => Promise<boolean>;
   addBookmark: (b: MemBookmark) => void;
   removeBookmark: (addr: string) => void;
+  setBookmarkLabel: (addr: string, label?: string) => void;
   dispose: () => void;
 };
 
@@ -52,6 +58,8 @@ export const useMemoryStore = create<State & Actions>((set, get) => ({
   loaded: false,
   scanning: false,
   stage: 'idle',
+  startedAt: undefined,
+  finishedAt: undefined,
   protections: ['rw-', 'rwx'],
   type: 'int',
   cmp: 'eq',
@@ -62,6 +70,7 @@ export const useMemoryStore = create<State & Actions>((set, get) => ({
   limit: 5000,
   results: [],
   bookmarks: [],
+  logs: [],
 
   ensureLoaded: async () => {
     const attached = useAppStore.getState().attached;
@@ -83,20 +92,40 @@ export const useMemoryStore = create<State & Actions>((set, get) => ({
   setTolerance: (t) => set({ tolerance: t }),
   setLimit: (n) => set({ limit: n }),
 
-  newScan: () => set({ results: [], stage: 'idle' }),
+  newScan: () => set({ results: [], stage: 'idle', logs: [], startedAt: undefined, finishedAt: undefined }),
   firstScan: async () => {
     try {
       await get().ensureLoaded();
     } catch {
       return;
     }
-    set({ scanning: true });
+    // Validate input value
+    const { type, value } = get();
+    const needsValue = true; // all current compares require a value
+    const invalid = type === 'string' ? (!value || String(value).length === 0) : (value === undefined || value === null || Number.isNaN(Number(value)));
+    if (needsValue && invalid) {
+      alert({ title: 'Memory', description: 'Please input a valid value before scanning.', variant: 'warning' });
+      get().log('warn', 'Scan aborted: missing or invalid value');
+      return;
+    }
+    // Log ranges summary
+    try {
+      const protections = get().protections;
+      const ranges: { base: string; size: number }[] = await window.api.frida.rpc('mem_ranges', { protections });
+      const total = ranges.reduce((acc, r) => acc + (r.size >>> 0), 0);
+      get().log('info', `Scanning ${ranges.length} ranges (~${(total / (1024*1024)).toFixed(2)} MB)`);
+    } catch (e: any) {
+      get().log('warn', `Range enumeration failed: ${e?.message || String(e)}`);
+    }
+    set({ scanning: true, startedAt: Date.now(), finishedAt: undefined });
     try {
       const { protections, type, cmp, value, value2, decimals, tolerance, limit } = get();
       const res: string[] = await window.api.frida.rpc('mem_scan', { protections, type, cmp, value, value2, decimals, tolerance, limit });
-      set({ results: res.map(addr => ({ addr })), scanning: false, stage: 'first' });
+      set({ results: res.map(addr => ({ addr })), scanning: false, stage: 'first', finishedAt: Date.now() });
+      get().log('info', `First Scan hits: ${res.length}`);
     } catch (e) {
-      set({ scanning: false });
+      set({ scanning: false, finishedAt: Date.now() });
+      get().log('error', `First Scan error: ${ (e as any)?.message || String(e) }`);
       throw e;
     }
   },
@@ -104,17 +133,19 @@ export const useMemoryStore = create<State & Actions>((set, get) => ({
     try { await get().ensureLoaded(); } catch { return; }
     const cur = get().results.map(r => r.addr);
     if (cur.length === 0) return;
-    set({ scanning: true });
+    set({ scanning: true, startedAt: Date.now(), finishedAt: undefined });
     try {
       const { type, cmp, value, value2, decimals, tolerance } = get();
       const res: string[] = await window.api.frida.rpc('mem_refine', cur, { type, cmp, value, value2, decimals, tolerance });
-      set({ results: res.map(addr => ({ addr })), scanning: false, stage: 'refined' });
+      set({ results: res.map(addr => ({ addr })), scanning: false, stage: 'refined', finishedAt: Date.now() });
+      get().log('info', `Next Scan hits: ${res.length}`);
     } catch (e) {
-      set({ scanning: false });
+      set({ scanning: false, finishedAt: Date.now() });
+      get().log('error', `Next Scan error: ${ (e as any)?.message || String(e) }`);
       throw e;
     }
   },
-  clearResults: () => set({ results: [], stage: 'idle' }),
+  clearResults: () => set({ results: [], stage: 'idle', startedAt: undefined, finishedAt: undefined }),
 
   read: async (addr, size) => {
     try { await get().ensureLoaded(); } catch { return []; }
@@ -135,5 +166,8 @@ export const useMemoryStore = create<State & Actions>((set, get) => ({
   },
   addBookmark: (b) => set({ bookmarks: [...get().bookmarks, b] }),
   removeBookmark: (addr) => set({ bookmarks: get().bookmarks.filter(b => b.addr !== addr) }),
-  dispose: () => set({ loaded: false, scanning: false, results: [], bookmarks: [], stage: 'idle' })
+  setBookmarkLabel: (addr, label) => set({ bookmarks: get().bookmarks.map(b => b.addr === addr ? { ...b, label } : b) }),
+  dispose: () => set({ loaded: false, scanning: false, results: [], bookmarks: [], stage: 'idle', startedAt: undefined, finishedAt: undefined, logs: [] }),
+  log: (level, text) => set({ logs: [...get().logs, { ts: Date.now(), level, text }] }),
+  clearLogs: () => set({ logs: [] })
 }));

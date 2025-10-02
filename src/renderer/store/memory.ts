@@ -1,173 +1,381 @@
 import { create } from 'zustand';
-import MEMORY_AGENT_SOURCE from '../agents/memory';
 import { useAppStore } from './app';
-import { alert } from '../components/Alerts';
+import { alert } from '../components/Alert';
 
 export type MemType = 'ubyte' | 'byte' | 'ushort' | 'short' | 'uint' | 'int' | 'ulong' | 'long' | 'float' | 'double' | 'string' | 'pointer';
 export type Protection = 'r--' | 'rw-' | 'r-x' | 'rwx';
+export type CompareMode = 'eq' | 'gt' | 'lt' | 'ge' | 'le' | 'between' | 'approx';
 
 export type MemResult = { addr: string };
-export type MemBookmark = { addr: string; type: MemType; label?: string };
+export type MemObj = { addr: string; type: MemType; label: string; lastValue?: string };
 
 type State = {
-  loaded: boolean; // agent loaded
+  loaded: boolean;
   scanning: boolean;
-  stage: 'idle' | 'first' | 'refined';
-  startedAt?: number;
-  finishedAt?: number;
   protections: Protection[];
   type: MemType;
-  cmp: 'eq' | 'gt' | 'lt' | 'ge' | 'le' | 'between' | 'approx';
+  cmp: CompareMode;
   value?: number | string;
-  value2?: number;
-  decimals: number; // for approx rounding
-  tolerance: number; // for approx tolerance
-  limit: number;
+  value2?: number | string;
   results: MemResult[];
-  bookmarks: MemBookmark[];
-  logs: { ts: number; level: 'info' | 'warn' | 'error'; text: string }[];
+  lib: MemObj[];
+  interval: number;
+  viewerAddr: string;
+  viewerType: MemType;
+  viewerSize: number;
 };
 
 type Actions = {
   ensureLoaded: () => Promise<void>;
-  setProtections: (ps: Protection[]) => void;
-  setType: (t: MemType) => void;
-  setCmp: (c: State['cmp']) => void;
-  setValue: (v?: number | string) => void;
-  setValue2: (v?: number) => void;
-  setDecimals: (d: number) => void;
-  setTolerance: (t: number) => void;
-  setLimit: (n: number) => void;
+  setProtections: (protections: Protection[]) => void;
+  setType: (type: MemType) => void;
+  setCmp: (cmp: CompareMode) => void;
+  setValue: (value?: number | string) => void;
+  setValue2: (value?: number | string) => void;
   newScan: () => void;
   firstScan: () => Promise<void>;
   nextScan: () => Promise<void>;
   clearResults: () => void;
-  log: (level: 'info' | 'warn' | 'error', text: string) => void;
-  clearLogs: () => void;
   read: (addr: string, size: number) => Promise<number[]>;
   readTyped: (addr: string, type: MemType) => Promise<any>;
   write: (addr: string, bytes: number[]) => Promise<boolean>;
   writeTyped: (addr: string, type: MemType, value: any) => Promise<boolean>;
-  addBookmark: (b: MemBookmark) => void;
-  removeBookmark: (addr: string) => void;
-  setBookmarkLabel: (addr: string, label?: string) => void;
+  setViewerAddr: (addr: string) => void;
+  setViewerType: (type: MemType) => void;
+  setViewerSize: (size: number) => void;
+  addToLibrary: (entry: { addr: string; type: MemType; label: string }) => boolean;
+  removeFromLibrary: (addr: string) => void;
+  updateLibraryLabel: (addr: string, label: string) => void;
+  refreshLibraryValue: (addr: string) => Promise<string | null>;
+  clearLibrary: () => void;
   dispose: () => void;
 };
 
-export const useMemoryStore = create<State & Actions>((set, get) => ({
+const DEFAULT_PROTECTIONS: Protection[] = ['rw-', 'rwx'];
+const DEFAULT_VIEWER_SIZE = 256;
+const NUMERIC_TYPES: MemType[] = ['ubyte', 'byte', 'ushort', 'short', 'uint', 'int', 'ulong', 'long', 'float', 'double'];
+
+const INITIAL_STATE: State = {
   loaded: false,
   scanning: false,
-  stage: 'idle',
-  startedAt: undefined,
-  finishedAt: undefined,
-  protections: ['rw-', 'rwx'],
-  type: 'int',
+  protections: [...DEFAULT_PROTECTIONS],
+  type: 'ubyte',
   cmp: 'eq',
   value: undefined,
   value2: undefined,
-  decimals: 1,
-  tolerance: 0,
-  limit: 5000,
   results: [],
-  bookmarks: [],
-  logs: [],
+  lib: [],
+  interval: 100,
+  viewerAddr: '0x0',
+  viewerType: 'byte',
+  viewerSize: DEFAULT_VIEWER_SIZE,
+};
 
-  ensureLoaded: async () => {
-    const attached = useAppStore.getState().attached;
-    if (!attached) {
-      const msg = 'No attached process. Attach before using Memory tools.';
-      alert({ title: 'Memory', description: msg, variant: 'warning' });
-      throw new Error(msg);
+// Ensure caller is attached before firing RPCs.
+function ensureAttached() {
+  const attached = useAppStore.getState().attached;
+  if (!attached) {
+    alert({ title: 'Not attached', description: 'Attach to a process first.', variant: 'warning' });
+    throw new Error('No attached process');
+  }
+  return attached;
+}
+
+// Convert user input into a scan-friendly primitive.
+function normalizeAddress(input: string) {
+  const raw = (input || '').trim();
+  if (!raw) throw new Error('Address is required');
+  const normalized = raw.startsWith('0x') || raw.startsWith('0X') ? raw : `0x${raw}`;
+  try {
+    BigInt(normalized);
+  } catch {
+    throw new Error('Invalid address format');
+  }
+  return normalized;
+}
+
+function coerceScanValue(type: MemType, raw: number | string | undefined) {
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  if (type === 'string') return String(raw);
+  if (type === 'pointer') return String(raw);
+  const num = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(num)) {
+    throw new Error('Numeric value required');
+  }
+  return num;
+}
+
+// Assemble payloads for scan/refine calls based on current state.
+function buildScanPayload(state: State) {
+  const value = coerceScanValue(state.type, state.value);
+  const value2 = state.cmp === 'between' ? coerceScanValue(state.type, state.value2 as any) : undefined;
+  if (state.cmp === 'between') {
+    if (!NUMERIC_TYPES.includes(state.type)) {
+      throw new Error('Between comparison requires numeric types');
     }
+    if (typeof value !== 'number' || typeof value2 !== 'number') {
+      throw new Error('Between comparison requires numeric values');
+    }
+  }
+  return {
+    protections: state.protections.length ? state.protections : DEFAULT_PROTECTIONS,
+    type: state.type,
+    cmp: state.cmp,
+    value,
+    value2,
+  };
+}
+
+export const useMemoryStore = create<State & Actions>((set, get) => ({
+  ...INITIAL_STATE,
+
+  async ensureLoaded() {
+    ensureAttached();
     if (get().loaded) return;
-    await window.api.frida.createScript(MEMORY_AGENT_SOURCE);
-    set({ loaded: true });
-  },
-  setProtections: (ps) => set({ protections: ps }),
-  setType: (t) => set({ type: t }),
-  setCmp: (c) => set({ cmp: c }),
-  setValue: (v) => set({ value: v }),
-  setValue2: (v) => set({ value2: v }),
-  setDecimals: (d) => set({ decimals: d }),
-  setTolerance: (t) => set({ tolerance: t }),
-  setLimit: (n) => set({ limit: n }),
-
-  newScan: () => set({ results: [], stage: 'idle', logs: [], startedAt: undefined, finishedAt: undefined }),
-  firstScan: async () => {
     try {
-      await get().ensureLoaded();
-    } catch {
+      const res = await window.api.frida.agentPing();
+      if (res?.ok) {
+        set({ loaded: true });
+        return;
+      }
+      throw new Error('Agent did not respond');
+    } catch (err: any) {
+      set({ loaded: false });
+      const msg = err?.message || String(err);
+      alert({ title: 'Agent unavailable', description: msg, variant: 'error' });
+      throw err;
+    }
+  },
+
+  setProtections(protections) {
+    set({ protections: protections.length ? [...protections] : [...DEFAULT_PROTECTIONS] });
+  },
+
+  setType(type) {
+    set((state) => {
+      const nextCmp = state.cmp === 'between' && !NUMERIC_TYPES.includes(type) ? 'eq' : state.cmp;
+      return {
+        type,
+        cmp: nextCmp,
+        value2: type === 'string' ? undefined : state.value2,
+      };
+    });
+  },
+
+  setCmp(cmp) {
+    const type = get().type;
+    if (cmp === 'between' && !NUMERIC_TYPES.includes(type)) {
+      alert({ title: 'Invalid comparison', description: 'Between comparison only supports numeric types.', variant: 'warning' });
       return;
     }
-    // Validate input value
-    const { type, value } = get();
-    const needsValue = true; // all current compares require a value
-    const invalid = type === 'string' ? (!value || String(value).length === 0) : (value === undefined || value === null || Number.isNaN(Number(value)));
-    if (needsValue && invalid) {
-      alert({ title: 'Memory', description: 'Please input a valid value before scanning.', variant: 'warning' });
-      get().log('warn', 'Scan aborted: missing or invalid value');
+    set({ cmp });
+  },
+
+  setValue(value) {
+    set({ value: value === '' ? undefined : value });
+  },
+
+  setValue2(value) {
+    set({ value2: value === '' ? undefined : value });
+  },
+
+  newScan() {
+    set({ results: [], scanning: false });
+  },
+
+  async firstScan() {
+    ensureAttached();
+    await get().ensureLoaded();
+    const state = get();
+    let payload;
+    try {
+      payload = buildScanPayload(state);
+    } catch (err: any) {
+      alert({ title: 'Scan value error', description: err?.message || String(err), variant: 'warning' });
       return;
     }
-    // Log ranges summary
-    try {
-      const protections = get().protections;
-      const ranges: { base: string; size: number }[] = await window.api.frida.rpc('mem_ranges', { protections });
-      const total = ranges.reduce((acc, r) => acc + (r.size >>> 0), 0);
-      get().log('info', `Scanning ${ranges.length} ranges (~${(total / (1024*1024)).toFixed(2)} MB)`);
-    } catch (e: any) {
-      get().log('warn', `Range enumeration failed: ${e?.message || String(e)}`);
-    }
-    set({ scanning: true, startedAt: Date.now(), finishedAt: undefined });
-    try {
-      const { protections, type, cmp, value, value2, decimals, tolerance, limit } = get();
-      const res: string[] = await window.api.frida.rpc('mem_scan', { protections, type, cmp, value, value2, decimals, tolerance, limit });
-      set({ results: res.map(addr => ({ addr })), scanning: false, stage: 'first', finishedAt: Date.now() });
-      get().log('info', `First Scan hits: ${res.length}`);
-    } catch (e) {
-      set({ scanning: false, finishedAt: Date.now() });
-      get().log('error', `First Scan error: ${ (e as any)?.message || String(e) }`);
-      throw e;
-    }
-  },
-  nextScan: async () => {
-    try { await get().ensureLoaded(); } catch { return; }
-    const cur = get().results.map(r => r.addr);
-    if (cur.length === 0) return;
-    set({ scanning: true, startedAt: Date.now(), finishedAt: undefined });
-    try {
-      const { type, cmp, value, value2, decimals, tolerance } = get();
-      const res: string[] = await window.api.frida.rpc('mem_refine', cur, { type, cmp, value, value2, decimals, tolerance });
-      set({ results: res.map(addr => ({ addr })), scanning: false, stage: 'refined', finishedAt: Date.now() });
-      get().log('info', `Next Scan hits: ${res.length}`);
-    } catch (e) {
-      set({ scanning: false, finishedAt: Date.now() });
-      get().log('error', `Next Scan error: ${ (e as any)?.message || String(e) }`);
-      throw e;
-    }
-  },
-  clearResults: () => set({ results: [], stage: 'idle', startedAt: undefined, finishedAt: undefined }),
 
-  read: async (addr, size) => {
-    try { await get().ensureLoaded(); } catch { return []; }
-    const bytes: number[] = await window.api.frida.rpc('mem_read', addr, size);
-    return bytes;
+    set({ scanning: true });
+    try {
+      const hits = await window.api.frida.mem.scan(payload);
+      set({ results: hits.map((addr: string) => ({ addr })), scanning: false });
+    } catch (err: any) {
+      set({ scanning: false });
+      const msg = err?.message || String(err);
+      alert({ title: 'Scan failed', description: msg, variant: 'error' });
+    }
   },
-  readTyped: async (addr, type) => {
-    try { await get().ensureLoaded(); } catch { return null as any; }
-    return await window.api.frida.rpc('mem_readtyped', addr, type);
+
+  async nextScan() {
+    ensureAttached();
+    await get().ensureLoaded();
+    const state = get();
+    if (!state.results.length) {
+      alert({ title: 'No previous scan', description: 'Run first scan before refine.', variant: 'info' });
+      return;
+    }
+
+    let payload;
+    try {
+      payload = buildScanPayload(state);
+    } catch (err: any) {
+      alert({ title: 'Refine value error', description: err?.message || String(err), variant: 'warning' });
+      return;
+    }
+
+    set({ scanning: true });
+    try {
+      const refined = await window.api.frida.mem.refine(state.results.map(r => r.addr), payload);
+      set({ results: refined.map((addr: string) => ({ addr })), scanning: false });
+    } catch (err: any) {
+      set({ scanning: false });
+      const msg = err?.message || String(err);
+      alert({ title: 'Refine failed', description: msg, variant: 'error' });
+    }
   },
-  write: async (addr, bytes) => {
-    try { await get().ensureLoaded(); } catch { return false; }
-    return await window.api.frida.rpc('mem_write', addr, bytes);
+
+  clearResults() {
+    set({ results: [] });
   },
-  writeTyped: async (addr, type, value) => {
-    try { await get().ensureLoaded(); } catch { return false; }
-    return await window.api.frida.rpc('mem_writetyped', addr, type, value);
+
+  async read(addr, size) {
+    await get().ensureLoaded();
+    try {
+      const normalized = normalizeAddress(addr);
+      return await window.api.frida.mem.read(normalized, size >>> 0);
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      alert({ title: 'Read failed', description: msg, variant: 'error' });
+      throw err;
+    }
   },
-  addBookmark: (b) => set({ bookmarks: [...get().bookmarks, b] }),
-  removeBookmark: (addr) => set({ bookmarks: get().bookmarks.filter(b => b.addr !== addr) }),
-  setBookmarkLabel: (addr, label) => set({ bookmarks: get().bookmarks.map(b => b.addr === addr ? { ...b, label } : b) }),
-  dispose: () => set({ loaded: false, scanning: false, results: [], bookmarks: [], stage: 'idle', startedAt: undefined, finishedAt: undefined, logs: [] }),
-  log: (level, text) => set({ logs: [...get().logs, { ts: Date.now(), level, text }] }),
-  clearLogs: () => set({ logs: [] })
+
+  async readTyped(addr, type) {
+    await get().ensureLoaded();
+    try {
+      const normalized = normalizeAddress(addr);
+      return await window.api.frida.mem.readTyped(normalized, type);
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      alert({ title: 'Typed read failed', description: msg, variant: 'error' });
+      throw err;
+    }
+  },
+
+  async write(addr, bytes) {
+    await get().ensureLoaded();
+    try {
+      const normalized = normalizeAddress(addr);
+      return await window.api.frida.mem.write(normalized, bytes);
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      alert({ title: 'Write failed', description: msg, variant: 'error' });
+      throw err;
+    }
+  },
+
+  async writeTyped(addr, type, value) {
+    await get().ensureLoaded();
+    try {
+      const normalized = normalizeAddress(addr);
+      return await window.api.frida.mem.writeTyped(normalized, type, value);
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      alert({ title: 'Typed write failed', description: msg, variant: 'error' });
+      throw err;
+    }
+  },
+
+  setViewerAddr(addr) {
+    set({ viewerAddr: addr });
+  },
+
+  setViewerType(type) {
+    set({ viewerType: type });
+  },
+
+  setViewerSize(size) {
+    if (!Number.isFinite(size) || size <= 0) {
+      alert({ title: 'Invalid size', description: 'Viewer size must be a positive number.', variant: 'warning' });
+      return;
+    }
+    set({ viewerSize: Math.floor(size) });
+  },
+
+  addToLibrary(entry) {
+    try {
+      const addr = normalizeAddress(entry.addr);
+      const label = (entry.label || '').trim();
+      if (!label) throw new Error('Label is required');
+      let next: MemObj[] = [];
+      set((state) => {
+        if (state.lib.some(item => item.addr === addr)) {
+          throw new Error('Address already exists in library');
+        }
+        next = [...state.lib, { addr, type: entry.type, label }];
+        return { lib: next };
+      });
+      return true;
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      alert({ title: 'Save failed', description: msg, variant: 'error' });
+      return false;
+    }
+  },
+
+  removeFromLibrary(addr) {
+    try {
+      const normalized = normalizeAddress(addr);
+      set(state => ({ lib: state.lib.filter(item => item.addr !== normalized) }));
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      alert({ title: 'Remove failed', description: msg, variant: 'error' });
+    }
+  },
+
+  updateLibraryLabel(addr, label) {
+    try {
+      const normalized = normalizeAddress(addr);
+      const trimmed = (label || '').trim();
+      if (!trimmed) throw new Error('Label cannot be empty');
+      set(state => ({
+        lib: state.lib.map(item => item.addr === normalized ? { ...item, label: trimmed } : item)
+      }));
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      alert({ title: 'Rename failed', description: msg, variant: 'error' });
+    }
+  },
+
+  async refreshLibraryValue(addr) {
+    try {
+      const normalized = normalizeAddress(addr);
+      const entry = get().lib.find(item => item.addr === normalized);
+      if (!entry) throw new Error('Library entry not found');
+      const value = await get().readTyped(normalized, entry.type);
+      const pretty = value === null || value === undefined ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+      set(state => ({
+        lib: state.lib.map(item => item.addr === normalized ? { ...item, lastValue: pretty } : item)
+      }));
+      return pretty;
+    } catch (err) {
+      return null;
+    }
+  },
+
+  clearLibrary() {
+    set({ lib: [] });
+  },
+
+  dispose() {
+    set({ ...INITIAL_STATE });
+  },
 }));
+
+// Simple helper to restore the store for tests and manual resets.
+export function resetMemoryStore() {
+  useMemoryStore.setState({
+    ...INITIAL_STATE,
+    protections: [...DEFAULT_PROTECTIONS],
+  });
+}

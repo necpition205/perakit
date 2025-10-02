@@ -5,9 +5,8 @@ import { useAppStore } from './store/app';
 import AttachPage from './pages/attach';
 import MemoryPage from './pages/memory';
 import { theme } from './theme';
-import { ToastContainer } from './components/Toast';
-import { AlertsContainer } from './components/Alerts';
 import { AnimatePresence, motion } from 'framer-motion';
+import { AlertsContainer } from './components/Alert';
 
 export default function App() {
   const activeTab = useAppStore(s => s.activeTab);
@@ -20,56 +19,31 @@ export default function App() {
   return (
     <ThemeProvider theme={theme}>
       <Global styles={css`
-        :root {
-          --border: ${theme.colors.border};
-          --accent-50: #eef2ff;
-          --accent-900: #1e293b;
-          --hover: #f3f4f6;
-        }
         html, body, #root { height: 100%; }
-        body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, Ubuntu, Cantarell, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji"; color: ${theme.colors.text}; background: ${theme.colors.bg}; }
+        body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, Ubuntu, Cantarell, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
         * { box-sizing: border-box; }
       `}/>
       <Layout>
         <AnimatePresence mode="wait">
-          {activeTab === 'attach' ? (
-            <motion.div
-              key="tab-attach"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.18 }}
-              style={{ height: '100%' }}
-            >
-              <AttachPage />
-            </motion.div>
-          ) : activeTab === 'memory' ? (
-            <motion.div
-              key="tab-memory"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.18 }}
-              style={{ height: '100%' }}
-            >
-              <MemoryPage />
-            </motion.div>
-          ) : (
             <motion.div
               key={`tab-${activeTab}`}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.18 }}
-              style={{ padding: 16 }}
+              style={{ height: '100%' }}
             >
-              <h3 style={{ marginTop: 0 }}>Coming soon</h3>
-              <p>Tab: {activeTab}</p>
+              {activeTab === 'attach' ? (
+                <AttachPage />
+              ) : activeTab === 'memory' ? (
+                <MemoryPage />
+              ) : (<>
+                <h3 style={{ marginTop: 0 }}>Coming soon</h3>
+                <p>Tab: {activeTab}</p>
+              </>)}
             </motion.div>
-          )}
         </AnimatePresence>
       </Layout>
-      <ToastContainer />
       <AlertsContainer />
     </ThemeProvider>
   );

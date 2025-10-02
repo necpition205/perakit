@@ -18,8 +18,9 @@ export type AttachTarget = { pid?: number; name?: string };
 export class FridaService {
   private session: Session | null = null;
   private masterScript: Script | null = null;
-  private addonScripts: Script[] = [];
   public readonly events = new EventEmitter();
+  private currentTarget: { pid?: number; name?: string; deviceId?: string } | null = null;
+  private attachedAt: number | null = null;
 
   async listDevices() {
     const devices = await ensureFrida().getDeviceManager().enumerateDevices();
@@ -47,11 +48,15 @@ export class FridaService {
     else if (target.name) this.session = await device.attach(target.name);
     else throw new Error('attach requires pid or name');
 
+    this.currentTarget = { ...target, deviceId };
+    this.attachedAt = Date.now();
+
     this.session.detached.connect((reason: any) => {
       // release references to avoid leaks on remote detach
       this.masterScript = null;
-      this.addonScripts = [];
       this.session = null;
+      this.currentTarget = null;
+      this.attachedAt = null;
       try {
         this.events.emit('detached', serializeReason(reason));
       } catch {}
@@ -69,29 +74,11 @@ export class FridaService {
     return { attached: true };
   }
 
-  async createScript(source: string) {
-    if (!this.session) throw new Error('No active session');
-    const sc = await this.session.createScript(source);
-    await sc.load();
-    this.addonScripts.push(sc);
-    return { loaded: true };
-  }
-
   async rpc<T = unknown>(method: string, ...args: any[]): Promise<T> {
-    // Prefer feature/addon scripts first, then fall back to master
-    const candidates: (Script | null)[] = [...this.addonScripts, this.masterScript];
-    if (candidates.length === 0) throw new Error('No active script');
-    for (const sc of candidates) {
-      if (!sc) continue;
-      try {
-        const fn = (sc as any).exports[method];
-        if (typeof fn === 'function') {
-          return await fn(...args);
-        }
-      } catch (_) {
-        // try next
-      }
-    }
+    if (!this.masterScript) throw new Error('No active script');
+    const sc: any = this.masterScript as any;
+    const fn = sc.exports[method];
+    if (typeof fn === 'function') return await fn(...args);
     throw new Error(`RPC method not found: ${method}`);
   }
 
@@ -100,18 +87,31 @@ export class FridaService {
       try { await this.masterScript.unload(); } catch {}
       this.masterScript = null;
     }
-    if (this.addonScripts.length) {
-      for (const sc of this.addonScripts) {
-        try { await sc.unload(); } catch {}
-      }
-      this.addonScripts = [];
-    }
     if (this.session) {
       try { await this.session.detach(); } catch {}
       this.session = null;
     }
     try { this.events.emit('detached', 'manual'); } catch {}
     return { detached: true };
+  }
+
+  status() {
+    return {
+      attached: !!this.session,
+      target: this.currentTarget,
+      attachedAt: this.attachedAt,
+      masterLoaded: !!this.masterScript,
+      addonCount: 0,
+    };
+  }
+
+  async pingAgent(): Promise<{ ok: boolean; version?: string }> {
+    try {
+      const res = await this.rpc<string>('version');
+      return { ok: true, version: res };
+    } catch {
+      return { ok: false };
+    }
   }
 
   private resolveMasterAgentPath(): string | null {
@@ -141,6 +141,9 @@ export class FridaService {
     if (!p) throw new Error('Master agent not found');
     const source = fs.readFileSync(p, 'utf8');
     const sc = await this.session.createScript(source);
+    sc.message.connect((message: any, data: any) => {
+      try { this.events.emit('message', { message, data }); } catch {}
+    });
     await sc.load();
     this.masterScript = sc;
   }

@@ -99,6 +99,22 @@ export function ApplyMargin(props: MarginProps) {
   return Array.from(styles.entries()).map(([k, v]) => `${k}: ${v}`).join('; ') + ";";
 }
 
+export interface StyleProps {
+  bg?: string;
+  text?: string;
+  border?: string;
+  bgBlur?: number | string;
+}
+
+export function ApplyStyle(props: StyleProps) {
+  const styles: Map<string, string> = new Map();
+  if (props.bg) styles.set(`background-color`, props.bg);
+  if (props.text) styles.set(`color`, props.text);
+  if (props.border) styles.set(`border`, `1px solid ${props.border}`);
+  if (props.bgBlur) styles.set(`backdrop-filter`, `blur(${numberOr(props.bgBlur)})`);
+  return Array.from(styles.entries()).map(([k, v]) => `${k}: ${v}`).join('; ') + ";";
+}
+
 export interface FlexProps {
   row?: boolean;
   column?: boolean;

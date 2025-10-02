@@ -6,11 +6,14 @@
   "scripts": {
     "clean": "rimraf dist",
     "postbuild": "bun scripts/postbuild.ts",
-    "dev": "concurrently -n main,renderer,electron -c cyan,magenta,green \"bun run dev:main\" \"bun run dev:renderer\" \"bun run dev:electron\"",
+    "dev": "concurrently -n types,agent,main,renderer,electron -c blue,yellow,cyan,magenta,green \"bun run dev:agent:types\" \"bun run dev:agent\" \"bun run dev:main\" \"bun run dev:renderer\" \"bun run dev:electron\"",
+    "dev:agent": "frida-compile agents/src/index.ts -o agents/master.js -w",
+    "dev:agent:types": "tsc -p agents/tsconfig.agent.json --noEmit -w",
     "dev:main": "tsup --config tsup.config.ts --watch",
     "dev:renderer": "vite",
     "dev:electron": "wait-on dist/main/main.js http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 nodemon -q --watch dist/main --watch dist/preload --exec \"electron .\"",
-    "build": "bun run clean && bun run build:main && bun run build:renderer && bun run postbuild",
+    "build": "bun run clean && bun run build:agent && bun run build:main && bun run build:renderer && bun run postbuild",
+    "build:agent": "frida-compile agents/src/index.ts -o agents/master.js",
     "build:main": "tsup --config tsup.config.ts",
     "build:renderer": "vite build",
     "preview": "bun run build && electron .",
@@ -43,7 +46,9 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@types/bun": "^1.2.23",
     "@types/electron": "^1.6.12",
+    "@types/frida-gum": "19.0.1",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.7.8",
     "@types/react": "^19.1.16",

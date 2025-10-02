@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import { alert } from '../components/Alerts';
-import { toast } from '../components/Toast';
+import { alert } from '../components/Alert';
 
 export type TabKey = 'attach' | 'memory' | 'modules' | 'threads' | 'java' | 'objc' | 'code' | 'extension' | 'console';
 
@@ -16,7 +15,6 @@ type State = {
   selectedProcessName?: string;
   attached?: { pid?: number; name?: string } | null;
   loading: boolean;
-  error?: string | null;
 };
 
 type Actions = {
@@ -36,7 +34,6 @@ export const useAppStore = create<State & Actions>((set, get) => ({
   processes: [],
   attached: null,
   loading: false,
-  error: null,
 
   setTab: (tab) => set({ activeTab: tab }),
 
@@ -44,26 +41,26 @@ export const useAppStore = create<State & Actions>((set, get) => ({
   setSelectedProcess: (payload) => set({ selectedPid: payload?.pid, selectedProcessName: payload?.name }),
 
   refreshDevices: async () => {
-    set({ loading: true, error: null });
+    set({ loading: true });
     try {
       const list = await window.api.frida.listDevices();
       set({ devices: list, loading: false });
     } catch (e: any) {
       const msg = e?.message || String(e);
-      set({ error: msg, loading: false });
+      set({ loading: false });
       alert({ title: 'Frida API error', description: msg, variant: 'error' });
     }
   },
 
   refreshProcesses: async (deviceId) => {
     const id = deviceId ?? get().selectedDeviceId;
-    set({ loading: true, error: null });
+    set({ loading: true });
     try {
       const list = await window.api.frida.listProcesses(id);
       set({ processes: list, loading: false });
     } catch (e: any) {
       const msg = e?.message || String(e);
-      set({ error: msg, loading: false });
+      set({ loading: false });
       alert({ title: 'Frida API error', description: msg, variant: 'error' });
     }
   },
@@ -78,33 +75,33 @@ export const useAppStore = create<State & Actions>((set, get) => ({
     const name = nameValid ? nameRaw.trim() : undefined;
     if (pid == null && !name) {
       const msg = 'Select a process or enter PID/Name.';
-      set({ error: msg });
+      set({ loading: false });
       alert({ title: 'Attach validation', description: msg, variant: 'warning' });
       return false;
     }
 
-    set({ loading: true, error: null });
+    set({ loading: true });
     try {
       await window.api.frida.attach({ pid, name, deviceId: get().selectedDeviceId });
       set({ attached: { pid, name }, loading: false });
       return true;
     } catch (e: any) {
       const msg = e?.message || String(e);
-      set({ error: msg, loading: false });
+      set({ loading: false });
       alert({ title: 'Attach failed', description: msg, variant: 'error' });
       return false;
     }
   },
 
   detach: async () => {
-    set({ loading: true, error: null });
+    set({ loading: true });
     try {
       await window.api.frida.detach();
       set({ attached: null, loading: false });
-      toast({ title: 'Detached', variant: 'info' });
+      alert({ title: 'Detached', variant: 'info', duration: 2400 });
     } catch (e: any) {
       const msg = e?.message || String(e);
-      set({ error: msg, loading: false });
+      set({ loading: false });
       alert({ title: 'Detach failed', description: msg, variant: 'error' });
     }
   },

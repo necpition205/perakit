@@ -22,19 +22,27 @@ export function registerIpc() {
     return await fridaService.detach();
   });
 
-  ipcMain.handle('frida:create-script', async (_e, source: string) => {
-    return await fridaService.createScript(source);
-  });
+  // create-script removed; master bundle only
 
   ipcMain.handle('frida:rpc', async (_e, method: string, ...args: any[]) => {
     return await fridaService.rpc(method, ...args);
   });
+
+  ipcMain.handle('frida:status', async () => fridaService.status());
+  ipcMain.handle('frida:agent-ping', async () => fridaService.pingAgent());
 
   // forward frida service events to all renderer windows
   fridaService.events.on('detached', (reason: string) => {
     const wins = BrowserWindow.getAllWindows();
     for (const w of wins) {
       try { w.webContents.send('frida:detached', { reason }); } catch {}
+    }
+  });
+
+  fridaService.events.on('message', (payload: any) => {
+    const wins = BrowserWindow.getAllWindows();
+    for (const w of wins) {
+      try { w.webContents.send('frida:message', payload); } catch {}
     }
   });
 }

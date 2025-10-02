@@ -4,15 +4,18 @@ import { ApplySize, ApplyPadding, ApplyMargin } from "../styles/util";
 
 const Button = styled.button<SizeProps & PaddingProps & MarginProps>`
   padding: 6px 8px;
+  border-radius: 6px;
   ${ApplySize}
   ${ApplyPadding}
   ${ApplyMargin}
-  border-radius: 6px;
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid ${props => props.theme.colors.outline};
   cursor: pointer;
-  background: var(--accent-50, #eef2ff);
-  color: var(--accent-900, #1e293b);
-  &:not(:disabled):hover { background: var(--accent-50, #f3f4f6); }
+  background: ${props => props.theme.colors.bgWeak};
+  color: ${props => props.theme.colors.ctWeak};
+  &:not(:disabled):hover {
+    background: ${props => props.theme.colors.bgRegular};
+    color: ${props => props.theme.colors.ctRegular};
+  }
   &:disabled { cursor: not-allowed; opacity: 0.6; }
 `;
 

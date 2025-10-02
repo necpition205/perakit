@@ -1,6 +1,6 @@
 import styled from "@emotion/styled";
-import type { SizeProps, PaddingProps, MarginProps, FlexProps, RoundedProps} from "../styles/util";
-import { ApplyFlex, ApplySize, ApplyPadding, ApplyMargin, ApplyRounded } from "../styles/util";
+import type { SizeProps, PaddingProps, MarginProps, FlexProps, RoundedProps, StyleProps} from "../styles/util";
+import { ApplyFlex, ApplySize, ApplyPadding, ApplyMargin, ApplyRounded, ApplyStyle } from "../styles/util";
 
 
 const YStack = styled.div<
@@ -8,7 +8,8 @@ const YStack = styled.div<
   SizeProps &
   PaddingProps &
   MarginProps &
-  RoundedProps
+  RoundedProps & 
+  StyleProps
 >`
   display:flex;
   flex-direction: column;
@@ -17,6 +18,7 @@ const YStack = styled.div<
   ${ApplyPadding}
   ${ApplyMargin}
   ${ApplyRounded}
+  ${ApplyStyle}
 `
 
 export default YStack;

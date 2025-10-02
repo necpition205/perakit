@@ -5,7 +5,7 @@ export function Portal({ children }: { children: React.ReactNode }) {
   const el = useMemo(() => document.createElement('div'), []);
   useEffect(() => {
     document.body.appendChild(el);
-    return () => { document.body.removeChild(el); };
+    return () => { try { document.body.removeChild(el); } catch {} };
   }, [el]);
   return createPortal(children, el);
 }
